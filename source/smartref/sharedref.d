@@ -1,11 +1,11 @@
-﻿module sharedref;
+﻿module smartref.sharedref;
 
 import core.atomic;
 import std.experimental.allocator;
 static import std.algorithm.mutation;
 import std.traits;
 import std.exception;
-import util;
+import smartref.util;
 
 struct SharedRef(Alloc,T,bool isShared = true)
 {

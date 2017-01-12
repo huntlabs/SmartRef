@@ -1,4 +1,4 @@
-﻿module util;
+﻿module smartref.util;
 
 import std.traits;
 import std.typecons;
