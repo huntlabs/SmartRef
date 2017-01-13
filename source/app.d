@@ -1,8 +1,10 @@
 import std.stdio;
-import smartref.sharedref;
 import std.experimental.allocator;
 import std.experimental.allocator.gc_allocator;
 import std.exception;
+
+import smartref.sharedref;
+import smartref.scopedref;
 
 void freeSharedInt(ref typeof(GCAllocator.instance) alloc, int * d)nothrow {
 	collectException({
@@ -20,4 +22,7 @@ void main()
 		assert(*a == 10);
 	}
 	writeln("Edit source/app.d to start your project.");
+	alias ScopedInt = ScopedRef!(typeof(GCAllocator.instance),int);
+
+	ScopedInt a = ScopedInt(new int(10), &freeSharedInt);
 }
