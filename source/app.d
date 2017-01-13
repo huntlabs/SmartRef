@@ -17,7 +17,7 @@ void main()
 
 	{
 		//auto malloc = 
-		auto a = GCAllocator.instance.makeSharedRefWithDeleter!(int,typeof(GCAllocator.instance))(&freeSharedInt,10);
+		auto a = GCAllocator.instance.makeSharedRefWithDeleter!(int)(&freeSharedInt,10);
 		assert(*a == 10);
 		auto b = GCAllocator.instance.makeSharedRef!int();
 		*b = 100;
@@ -26,5 +26,5 @@ void main()
 	writeln("Edit source/app.d to start your project.");
 
 
-	auto a = makeScopedRefWithDeleter!(int,typeof(GCAllocator.instance))(GCAllocator.instance,&freeSharedInt);
+	auto a = makeScopedRefWithDeleter!(int)(GCAllocator.instance,&freeSharedInt);
 }
