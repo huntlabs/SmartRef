@@ -3,8 +3,7 @@ import std.experimental.allocator;
 import std.experimental.allocator.gc_allocator;
 import std.exception;
 
-import smartref.sharedref;
-import smartref.scopedref;
+import smartref;
 
 void freeSharedInt(ref typeof(GCAllocator.instance) alloc, int * d)nothrow {
 	collectException({
@@ -16,13 +15,16 @@ void freeSharedInt(ref typeof(GCAllocator.instance) alloc, int * d)nothrow {
 void main()
 {
 
-	alias SharedInt = SharedRef!(typeof(GCAllocator.instance),int);
 	{
-		SharedInt a = SharedInt(new int(10), &freeSharedInt);
+		//auto malloc = 
+		auto a = GCAllocator.instance.makeSharedRefWithDeleter!(int,typeof(GCAllocator.instance))(&freeSharedInt,10);
 		assert(*a == 10);
+		auto b = GCAllocator.instance.makeSharedRef!int();
+		*b = 100;
+
 	}
 	writeln("Edit source/app.d to start your project.");
-	alias ScopedInt = ScopedRef!(typeof(GCAllocator.instance),int);
 
-	ScopedInt a = ScopedInt(new int(10), &freeSharedInt);
+
+	auto a = makeScopedRefWithDeleter!(int,typeof(GCAllocator.instance))(GCAllocator.instance,&freeSharedInt);
 }

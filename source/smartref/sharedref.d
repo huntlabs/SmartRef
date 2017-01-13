@@ -5,7 +5,10 @@ import std.experimental.allocator;
 static import std.algorithm.mutation;
 import std.traits;
 import std.exception;
+
 import smartref.util;
+import smartref.common;
+
 
 struct SharedRef(Alloc,T,bool isShared = true)
 {
@@ -121,7 +124,7 @@ private:
 			dd.free(alloc);
 		}
 		if (!dd.weakDef()){
-			collectException(alloc.dispose(dd));
+			collectException(smartRefAllocator.dispose(dd));
 			dd = null;
 		}
 	}
@@ -129,7 +132,7 @@ private:
 	{
 		_ptr = ptr;
 		if(ptr !is null) {
-			_dd = _alloc.make!(Data)(ptr,deleter);
+			_dd = smartRefAllocator.make!(Data)(ptr,deleter);
 			static if(is(T == class) && isInheritClass(T,QEnableSharedFromThis))
 				ptr.initializeFromSharedPointer(this);
 		}
@@ -213,7 +216,7 @@ private:
 		_ptr = null;
 		if (!_dd) return;
 		if (!_dd.weakDef()){
-			collectException(_alloc.dispose(_dd));
+			collectException(smartRefAllocator.dispose(_dd));
 			_dd = null;
 		}
 	}
@@ -225,7 +228,7 @@ private:
 			_ptr = o.value;
 		}
 		if (_dd && !_dd.weakDef())
-			_alloc.dispose(_dd);
+			smartRefAllocator.dispose(_dd);
 		_dd = o;
 		static if(!isSaticAlloc) 
 			_alloc = alloc;

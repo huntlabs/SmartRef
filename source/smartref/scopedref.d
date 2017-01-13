@@ -4,6 +4,7 @@ import std.experimental.allocator;
 import std.exception;
 import std.traits : isPointer;
 
+import smartref.common;
 import smartref.util;
 
 struct ScopedRef(Alloc,T)
