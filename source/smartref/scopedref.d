@@ -7,7 +7,7 @@ import std.traits : isPointer;
 import smartref.common;
 import smartref.util;
 
-struct ScopedRef(Alloc,T)
+struct IScopedRef(Alloc,T)
 {
 	alias ValueType = Pointer!T;
 	enum isSaticAlloc = (stateSize!Alloc == 0);

@@ -10,13 +10,13 @@ import smartref.util;
 import smartref.common;
 
 
-struct SharedRef(Alloc,T,bool isShared = true)
+struct ISharedRef(Alloc,T,bool isShared = true)
 {
 	alias ValueType = Pointer!T;
 	alias Deleter = void function(ref Alloc,ValueType) nothrow;
 	alias Data = ExternalRefCountData!(Alloc,ValueType,isShared);
-	alias TWeakRef = WeakRef!(Alloc,T,isShared);
-	alias TSharedRef = SharedRef!(Alloc,T,isShared);
+	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
+	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
 	static if(is(T == class)){
 		alias QEnableSharedFromThis = EnableSharedFromThis!(Alloc,T,isShared);
 	}
@@ -166,13 +166,13 @@ private:
 		alias _alloc = Alloc.instance;
 }
 
-struct WeakRef(Alloc,T,bool isShared = true)
+struct IWeakRef(Alloc,T,bool isShared = true)
 {
 	alias ValueType = Pointer!T;
 	alias Data = ExternalRefCountData!(Alloc,ValueType,isShared);
 	enum isSaticAlloc = (stateSize!Alloc == 0);
-	alias TWeakRef = WeakRef!(Alloc,T,isShared);
-	alias TSharedRef = SharedRef!(Alloc,T,isShared);
+	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
+	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
 
 	this(ref TSharedRef tref){
 		this._ptr = tref._ptr;
@@ -242,10 +242,10 @@ private:
 		alias _alloc = Alloc.instance;
 }
 
-abstract class EnableSharedFromThis(Alloc,T,bool isShared = true)
+abstract class IEnableSharedFromThis(Alloc,T,bool isShared = true)
 {
-	alias TWeakRef = WeakRef!(Alloc,T,isShared);
-	alias TSharedRef = SharedRef!(Alloc,T,isShared);
+	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
+	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
 
 	pragma(inline,true)
 	final TSharedRef sharedFromThis() { return TSharedRef(__weakPointer); }

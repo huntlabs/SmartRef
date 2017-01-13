@@ -1,67 +1,106 @@
 ﻿module smartref;
 
-public import smartref.scopedref;
-public import smartref.sharedref;
-import smartref.util;
-
 import std.experimental.allocator;
 
-auto makeSharedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
-	Pointer!T value = make!T(alloc,args);
+public import smartref.scopedref;
+public import smartref.sharedref;
+public import smartref.common;
+import smartref.util;
+
+alias SharedRef(T, bool isShared = true) = ISharedRef!(typeof(SmartGCAllocator.instance),T,isShared);
+alias WeakRef(T, bool isShared = true) = IWeakRef!(typeof(SmartGCAllocator.instance),T,isShared);
+alias EnableSharedFromThis(T, bool isShared = true) = IEnableSharedFromThis!(typeof(SmartGCAllocator.instance),T,isShared);
+alias ScopedRef(T) = IScopedRef!(typeof(SmartGCAllocator.instance),T);
+
+// alias
+auto makeSharedRef(T,Args...)(auto ref Args args){
+	return SharedRef!(T)(SmartGCAllocator.instance.make!T(args));
+}
+
+auto makeSingSharedRef(T,Args...)(auto ref Args args){
+	return SharedRef!(T,false)(SmartGCAllocator.instance.make!T(args));
+}
+
+auto makeScopedRef(T,Args...)(auto ref Args args){
+	return ScopedRef!(T)(SmartGCAllocator.instance.make!T(args));
+}
+
+auto makeSharedRefWithDeleter(T,Args...)(auto ref Args args){
+	static assert(args.length > 0);
+	static assert(is(typeof(args[0]) == void function(ref typeof(SmartGCAllocator.instance),Pointer!T) nothrow));
+	return SharedRef!(T)(SmartGCAllocator.instance.make!T(args[1..$]),args[0]);
+}
+
+
+auto makeSingleSharedRefWithDeleter(T,Args...)(auto ref Args args){
+	static assert(args.length > 0);
+	static assert(is(typeof(args[0]) == void function(ref typeof(SmartGCAllocator.instance),Pointer!T) nothrow));
+	return SharedRef!(T,false)(SmartGCAllocator.instance.make!T(args[1..$]),args[0]);
+}
+
+auto makeScopedRefWithDeleter(T,Args...)(auto ref Args args){
+	static assert(args.length > 0);
+	static assert(is(typeof(args[0]) == void function(ref typeof(SmartGCAllocator.instance),Pointer!T) nothrow));
+	return ScopedRef!(T)(SmartGCAllocator.instance.make!T(args[1..$]),args[0]);
+}
+
+// I
+auto makeISharedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
+	Pointer!T value = alloc.make!T(args);
 	static if(stateSize!Alloc == 0){
-		return SharedRef!(Alloc,T)(value);
+		return ISharedRef!(Alloc,T)(value);
 	} else {
-		return SharedRef!(Alloc,T)(alloc,value);
+		return ISharedRef!(Alloc,T)(alloc,value);
 	}
 }
 
-auto makeSingleSharedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
-	Pointer!T value = make!T(alloc,args);
+auto makeSinglISharedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
+	Pointer!T value = alloc.make!T(args);
 	static if(stateSize!Alloc == 0){
-		return SharedRef!(Alloc,T,false)(value);
+		return ISharedRef!(Alloc,T,false)(value);
 	} else {
-		return SharedRef!(Alloc,T,false)(alloc,value);
+		return ISharedRef!(Alloc,T,false)(alloc,value);
 	}
 }
 
-auto makeScopedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
-	Pointer!T value = make!T(alloc,args);
+auto makeIScopedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
+	Pointer!T value = alloc.make!T(args);
 	static if(stateSize!Alloc == 0){
-		return ScopedRef!(Alloc,T)(value);
+		return IScopedRef!(Alloc,T)(value);
 	} else {
-		return ScopedRef!(Alloc,T)(alloc,value);
+		return IScopedRef!(Alloc,T)(alloc,value);
 	}
 }
 
-auto makeSharedRefWithDeleter(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
+auto makeISharedRefWithDeleter(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
 	static assert(args.length > 0);
 	static assert(is(typeof(args[0]) == void function(ref Alloc,Pointer!T) nothrow));
-	Pointer!T value = make!T(alloc,args[1..$]);
+	Pointer!T value = alloc.make!T(args[1..$]);
 	static if(stateSize!Alloc == 0){
-		return SharedRef!(Alloc,T)(value,args[0]);
+		return ISharedRef!(Alloc,T)(value,args[0]);
 	} else {
-		return SharedRef!(Alloc,T)(alloc,value,args[0]);
+		return ISharedRef!(Alloc,T)(alloc,value,args[0]);
 	}
 }
 
-auto makeSingleSharedRefWithDeleter(T,Alloc,Args...)(auto ref  Alloc alloc,auto ref Args args){
+auto makeSingleISharedRefWithDeleter(T,Alloc,Args...)(auto ref  Alloc alloc,auto ref Args args){
 	static assert(args.length > 0);
 	static assert(is(typeof(args[0]) == void function(ref Alloc,Pointer!T) nothrow));
-	Pointer!T value = make!T(alloc,args[1..$]);
+	Pointer!T value = alloc.make!T(args[1..$]);
 	static if(stateSize!Alloc == 0){
-		return SharedRef!(Alloc,T,false)(value,args[0]);
+		return ISharedRef!(Alloc,T,false)(value,args[0]);
 	} else {
-		return SharedRef!(Alloc,T,false)(alloc,value,args[0]);
+		return ISharedRef!(Alloc,T,false)(alloc,value,args[0]);
 	}
 }
 
-auto makeScopedRefWithDeleter(T,Alloc,Args...)(auto ref  Alloc alloc,auto ref Args args){
+auto makeIScopedRefWithDeleter(T,Alloc,Args...)(auto ref  Alloc alloc,auto ref Args args){
 	static assert(args.length > 0);
 	static assert(is(typeof(args[0]) == void function(ref Alloc,Pointer!T) nothrow));
-	Pointer!T value = make!T(alloc,args[1..$]);
+	Pointer!T value = alloc.make!T(args[1..$]);
 	static if(stateSize!Alloc == 0){
-		return ScopedRef!(Alloc,T)(value,args[0]);
+		return IScopedRef!(Alloc,T)(value,args[0]);
 	} else {
-		return ScopedRef!(Alloc,T)(alloc,value,args[0]);
+		return IScopedRef!(Alloc,T)(alloc,value,args[0]);
 	}
 }
