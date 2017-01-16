@@ -14,7 +14,8 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 {
 	alias ValueType = Pointer!T;
 	alias Deleter = void function(ref Alloc,ValueType) nothrow;
-	alias Data = ExternalRefCountData!(Alloc,ValueType,isShared);
+	alias Data = ExternalRefCountData!(Alloc,isShared);
+	alias DataWithDeleter = ExternalRefCountDataWithDeleter!(Alloc,ValueType,isShared);
 	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
 	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
 	static if(is(T == class)){
@@ -54,7 +55,7 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 	}
 
 	this(ref TWeakRef wptr){
-		internalSet(wptr._dd,wptr._alloc);
+		internalSet(wptr._dd,wptr._alloc,wptr._ptr);
 	}
 
 	~this(){deref();}
@@ -91,13 +92,24 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 		return TWeakRef(this);
 	}
 
+	auto castTo(U)(){
+		ISharedRef!(Alloc,U,isShared) result;
+		if(isNull)
+			return result;
+		alias CastType = Pointer!U;
+		CastType u = cast(CastType)_ptr;
+		if(u !is null)
+			result.internalSet(_dd,_alloc,u);
+		return result;
+	}
+
 	void opAssign(ref TSharedRef rhs){
 		TSharedRef copy = TSharedRef(rhs);
 		swap(copy);
 	}
 
 	void opAssign(ref TWeakRef rhs){
-		internalSet(rhs._dd,rhs._alloc);
+		internalSet(rhs._dd,rhs._alloc,rhs._ptr);
 	}
 
 	static if (isPointer!ValueType) {
@@ -132,13 +144,13 @@ private:
 	{
 		_ptr = ptr;
 		if(ptr !is null) {
-			_dd = smartRefAllocator.make!(Data)(ptr,deleter);
+			_dd = smartRefAllocator.make!(DataWithDeleter)(ptr,deleter);
 			static if(is(T == class) && isInheritClass(T,QEnableSharedFromThis))
 				ptr.initializeFromSharedPointer(this);
 		}
 	}
 
-	void internalSet(Data o,ref Alloc alloc){
+	void internalSet(Data o,ref Alloc alloc, ValueType ptr){
 		static if(!isSaticAlloc) {
 			Alloc tmpalloc = _alloc;
 			_alloc = alloc;
@@ -149,7 +161,7 @@ private:
 			if(o.strongref > 0){
 				o.strongRef();
 				o.weakRef();
-				_ptr = o.value;
+				_ptr = ptr;
 			} else {
 				_ptr = null;
 				o = null;
@@ -158,7 +170,7 @@ private:
 		std.algorithm.mutation.swap(_dd,o);
 		deref(o,tmpalloc);
 	}
-	ValueType _ptr;// 只为保留指针在栈中，如果指针是GC分配的内存，而ExternalRefCountData非GC的，则不用把非GC内存添加到GC的扫描列表中
+	ValueType _ptr;// 
 	Data _dd;
 	static if(!isSaticAlloc)
 		Alloc _alloc ;
@@ -169,7 +181,7 @@ private:
 struct IWeakRef(Alloc,T,bool isShared = true)
 {
 	alias ValueType = Pointer!T;
-	alias Data = ExternalRefCountData!(Alloc,ValueType,isShared);
+	alias Data = ExternalRefCountData!(Alloc,isShared);
 	enum isSaticAlloc = (stateSize!Alloc == 0);
 	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
 	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
@@ -190,7 +202,7 @@ struct IWeakRef(Alloc,T,bool isShared = true)
 			this._alloc = tref._alloc;
 	}
 
-	pragma(inline,true) bool isNull() { return (_dd is null || _ptr is null ||  _dd.value is null || _dd.strongref == 0); }
+	pragma(inline,true) bool isNull() { return (_dd is null || _ptr is null || _dd.strongref == 0); }
 	pragma(inline,true) ValueType data() { return isNull()  ? null : _ptr; }
 	pragma(inline) void swap(ref TWeakRef tref) 
 	{
@@ -208,7 +220,7 @@ struct IWeakRef(Alloc,T,bool isShared = true)
 	}
 	
 	void opAssign(ref TSharedRef rhs){
-		internalSet(rhs._dd,rhs._alloc);
+		internalSet(rhs._dd,rhs._alloc,rhs._ptr);
 	}
 private:
 	void deref() nothrow
@@ -221,11 +233,11 @@ private:
 		}
 	}
 
-	void internalSet(Data o,ref Alloc alloc){
+	void internalSet(Data o,ref Alloc alloc,ValueType ptr){
 		if (_dd is o) return;
 		if (o) {
 			o.weakRef();
-			_ptr = o.value;
+			_ptr = ptr;
 		}
 		if (_dd && !_dd.weakDef())
 			smartRefAllocator.dispose(_dd);
@@ -264,68 +276,56 @@ private:
 
 private:
 
-final class ExternalRefCountData(Alloc,ValueType,bool isShared)
-{
-	alias Deleter = void function(ref Alloc,ValueType) nothrow;
 
-	this(ValueType ptr, Deleter dele){
-		value = ptr;
-		deleater = dele;
-	}
-	Deleter  deleater;
-	ValueType value;
+abstract class ExternalRefCountData(Alloc,bool isShared)
+{
+	
 	pragma(inline,true)
-	int strongDef(){
+	final int strongDef(){
 		static if(isShared)
 			return atomicOp!("-=")(_strongref,1);
 		else 
 			return -- _strongref;
 	}
 	pragma(inline)
-	int strongRef(){
+	final int strongRef(){
 		static if(isShared)
 			return atomicOp!("+=")(_strongref,1);
 		else
 			return ++ _strongref;
 	}
 	pragma(inline,true)
-	int weakDef(){
+	final int weakDef(){
 		static if(isShared)
 			return atomicOp!("-=")(_weakref,1);
 		else
 			return -- _weakref;
 	}
 	pragma(inline)
-	int weakRef(){
+	final int weakRef(){
 		static if(isShared)
 			return atomicOp!("+=")(_weakref,1);
 		else
 			return ++ _weakref;
 	}
-
+	
 	pragma(inline,true)
-	@property weakref(){
+	final @property weakref(){
 		static if(isShared)
 			return atomicLoad(_weakref);
 		else
 			return _weakref;
 	}
-
+	
 	pragma(inline,true)
-	@property strongref(){
+	final @property strongref(){
 		static if(isShared)
 			return atomicLoad(_strongref);
 		else
 			return _strongref;
 	}
 	
-	pragma(inline,true)
-	void free(ref Alloc alloc){
-		if(deleater && value) 
-			deleater(alloc,value);
-		deleater = null;
-		value = null;
-	}
+	void free(ref Alloc alloc) nothrow;
 private:
 	static if(isShared){
 		shared int _weakref = 1;
@@ -336,3 +336,22 @@ private:
 	}
 }
 
+final class ExternalRefCountDataWithDeleter(Alloc,ValueType,bool isShared) : ExternalRefCountData!(Alloc,isShared)
+{
+	alias Deleter = void function(ref Alloc,ValueType) nothrow;
+	
+	this(ValueType ptr, Deleter dele){
+		value = ptr;
+		deleater = dele;
+	}
+
+	Deleter  deleater;
+	ValueType value;
+
+	override void free(ref Alloc alloc) nothrow{
+		if(deleater && value) 
+			deleater(alloc,value);
+		deleater = null;
+		value = null;
+	}
+}
