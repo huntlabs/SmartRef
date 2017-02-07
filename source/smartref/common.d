@@ -145,7 +145,7 @@ class SharedListAllocator(ParentAllocator,
 	: IAllocator
 {
 	import std.traits : hasMember;
-	import std.typecons : Ternary;
+	import std.typecons ;
 
 	alias MySharedFreeList = SharedFreeList!(ParentAllocator,minSize,maxSize,unbounded);
 	private shared MySharedFreeList _alloc;
