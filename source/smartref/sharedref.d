@@ -19,7 +19,7 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
 	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
 	static if(is(T == class)){
-		alias QEnableSharedFromThis = EnableSharedFromThis!(Alloc,T,isShared);
+		alias QEnableSharedFromThis = IEnableSharedFromThis!(Alloc,T,isShared);
 	}
 	enum isSaticAlloc = (stateSize!Alloc == 0);
 
@@ -51,7 +51,7 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 			_dd.weakRef();
 		}
 		static if(!isSaticAlloc)
-			this._alloc = tref._alloc;
+			this._alloc = sptr._alloc;
 	}
 
 	this(ref TWeakRef wptr){
@@ -59,6 +59,8 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 	}
 
 	~this(){deref();}
+
+	alias data this;
 
 	@property ValueType data() {return _ptr;}
 	@property bool isNull()const {return (_ptr is null);}
@@ -145,8 +147,8 @@ private:
 		_ptr = ptr;
 		if(ptr !is null) {
 			_dd = smartRefAllocator.make!(DataWithDeleter)(ptr,deleter);
-			static if(is(T == class) && isInheritClass(T,QEnableSharedFromThis))
-				ptr.initializeFromSharedPointer(this);
+			static if(is(T == class) && isInheritClass!(T,QEnableSharedFromThis))
+				_ptr.initializeFromSharedPointer(this);
 		}
 	}
 
@@ -253,6 +255,7 @@ private:
 	else
 		alias _alloc = Alloc.instance;
 }
+
 
 abstract class IEnableSharedFromThis(Alloc,T,bool isShared = true)
 {

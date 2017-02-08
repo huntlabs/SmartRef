@@ -2,6 +2,7 @@
 
 import std.traits;
 import std.typecons;
+import std.meta;
 
 template Pointer(T) {
 	static if(is(T == class) || is(T == class)){
