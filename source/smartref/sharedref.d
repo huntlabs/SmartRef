@@ -114,6 +114,10 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 		internalSet(rhs._dd,rhs._alloc,rhs._ptr);
 	}
 
+	void opAssign(TSharedRef rhs){
+		swap(rhs);
+	}
+
 	static if (isPointer!ValueType) {
 		ref T opUnary(string op)()
 			if (op == "*")
@@ -206,6 +210,7 @@ struct IWeakRef(Alloc,T,bool isShared = true)
 
 	pragma(inline,true) bool isNull() { return (_dd is null || _ptr is null || _dd.strongref == 0); }
 	pragma(inline,true) ValueType data() { return isNull()  ? null : _ptr; }
+	pragma(inline) void clear() { TWeakRef copy = TWeakRef.init; swap(copy);}
 	pragma(inline) void swap(ref TWeakRef tref) 
 	{
 		std.algorithm.mutation.swap(tref._dd,this._dd);
@@ -224,6 +229,11 @@ struct IWeakRef(Alloc,T,bool isShared = true)
 	void opAssign(ref TSharedRef rhs){
 		internalSet(rhs._dd,rhs._alloc,rhs._ptr);
 	}
+
+	void opAssign(TWeakRef rhs){
+		swap(rhs);
+	}
+	
 private:
 	void deref() nothrow
 	{
