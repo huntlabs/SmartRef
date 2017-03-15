@@ -151,9 +151,14 @@ unittest{
 	{
 		auto sclass = makeSharedRef!(shared TestMyClass)(100);
 		sclass.i = 1000;
+
+		auto sobj = sclass.castTo!(shared Object)();
+		//auto nsared = sclass.castTo!(TestMyClass)(); , erro mast all sheref or not
+
 		SharedRef!TestMyClass t  = makeSharedRef!TestMyClass(400);
 		t.i = 50;
 		auto th = t.sharedFromThis();
+		auto tobj = th.castTo!(Object)();
 		th.i = 30;
 	}
 }

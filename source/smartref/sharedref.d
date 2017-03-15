@@ -15,7 +15,7 @@ struct ISharedRef(Alloc,T)
 	enum isShared = is(T == shared);
 	alias ValueType = Pointer!T;
 	alias Deleter = void function(ref Alloc,ValueType) nothrow;
-	alias Data = ExternalRefCountData!(Alloc);
+	alias Data = ExternalRefCountData!(Alloc,isShared);
 	alias DataWithDeleter = ExternalRefCountDataWithDeleter!(Alloc,ValueType,isShared);
 	alias TWeakRef = IWeakRef!(Alloc,T);
 	alias TSharedRef = ISharedRef!(Alloc,T);
@@ -95,7 +95,9 @@ struct ISharedRef(Alloc,T)
 		return TWeakRef(this);
 	}
 
-	auto castTo(U)(){
+	auto castTo(U)() 
+		if(is(U == shared) == isShared)
+	{
 		ISharedRef!(Alloc,U) result;
 		if(isNull)
 			return result;
@@ -187,8 +189,9 @@ private:
 
 struct IWeakRef(Alloc,T)
 {
+	enum isShared = is(T == shared);
 	alias ValueType = Pointer!T;
-	alias Data = ExternalRefCountData!(Alloc);
+	alias Data = ExternalRefCountData!(Alloc, isShared);
 	enum isSaticAlloc = (stateSize!Alloc == 0);
 	alias TWeakRef = IWeakRef!(Alloc,T);
 	alias TSharedRef = ISharedRef!(Alloc,T);
@@ -297,18 +300,62 @@ private:
 private:
 
 
-interface ExternalRefCountData(Alloc)
+abstract class ExternalRefCountData(Alloc, bool isShared)
 {
-	int strongDef() nothrow;
-	int strongRef() nothrow;
-	int weakDef() nothrow;
-	int weakRef() nothrow;
-	@property int weakref() nothrow;
-	@property int strongref() nothrow;
+	pragma(inline,true) final int strongDef() nothrow {
+		static if(isShared)
+			return atomicOp!("-=")(_strongref,1);
+		else 
+			return -- _strongref;
+	}
+	
+	
+	pragma(inline,true) final int strongRef() nothrow{
+		static if(isShared)
+			return atomicOp!("+=")(_strongref,1);
+		else
+			return ++ _strongref;
+	}
+	
+	pragma(inline,true) final int weakDef() nothrow {
+		static if(isShared)
+			return atomicOp!("-=")(_weakref,1);
+		else
+			return -- _weakref;
+	}
+	pragma(inline,true) final int weakRef() nothrow {
+		static if(isShared)
+			return atomicOp!("+=")(_weakref,1);
+		else
+			return ++ _weakref;
+	}
+	
+	pragma(inline,true) final @property int weakref() nothrow{
+		static if(isShared)
+			return atomicLoad(_weakref);
+		else
+			return _weakref;
+	}
+	
+	pragma(inline,true) final @property int strongref() nothrow{
+		static if(isShared)
+			return atomicLoad(_strongref);
+		else
+			return _strongref;
+	}
+
 	void free(ref Alloc alloc) nothrow;
+
+	static if(isShared){
+		shared int _weakref = 1;
+		shared int _strongref = 1;
+	} else {
+		int _weakref = 1;
+		int _strongref = 1;
+	}
 }
 
-final class ExternalRefCountDataWithDeleter(Alloc,ValueType,bool isShared) : ExternalRefCountData!(Alloc)
+final class ExternalRefCountDataWithDeleter(Alloc,ValueType,bool isShared) : ExternalRefCountData!(Alloc,isShared)
 {
 	pragma(msg, "is  ahsred " ~ isShared.stringof);
 	alias Deleter = void function(ref Alloc,ValueType) nothrow;
@@ -318,65 +365,13 @@ final class ExternalRefCountDataWithDeleter(Alloc,ValueType,bool isShared) : Ext
 		deleater = dele;
 	}
 
-
-	override int strongDef() nothrow {
-		static if(isShared)
-			return atomicOp!("-=")(_strongref,1);
-		else 
-			return -- _strongref;
-	}
-
-
-	override int strongRef() nothrow{
-		static if(isShared)
-			return atomicOp!("+=")(_strongref,1);
-		else
-			return ++ _strongref;
-	}
-
-	override int weakDef() nothrow {
-		static if(isShared)
-			return atomicOp!("-=")(_weakref,1);
-		else
-			return -- _weakref;
-	}
-	override int weakRef() nothrow {
-		static if(isShared)
-			return atomicOp!("+=")(_weakref,1);
-		else
-			return ++ _weakref;
-	}
-
-	override @property int weakref() nothrow{
-		static if(isShared)
-			return atomicLoad(_weakref);
-		else
-			return _weakref;
-	}
-
-	override @property int strongref() nothrow{
-		static if(isShared)
-			return atomicLoad(_strongref);
-		else
-			return _strongref;
-	}
-
 	override void free(ref Alloc alloc) nothrow{
 		if(deleater && value) 
 			deleater(alloc,value);
 		deleater = null;
 		value = null;
 	}
-
-private:
-	static if(isShared){
-		shared int _weakref = 1;
-		shared int _strongref = 1;
-	} else {
-		int _weakref = 1;
-		int _strongref = 1;
-	}
-
+	
 	Deleter  deleater;
 	ValueType value;
 }
