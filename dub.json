@@ -1,9 +1,9 @@
 {
 	"name": "smartref",
 	"authors": [
-		"dsby"
+		"dushibaiyu"
 	],
-	"description": "A minimal D application.",
-	"copyright": "Copyright © 2017, dsby",
-	"license": "proprietary"
+	"description": "Smart Ref/Pointer For D",
+	"copyright": "Copyright © 2017, 渡世白玉",
+	"license": "BSD-3.0"
 }
