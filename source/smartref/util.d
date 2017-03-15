@@ -5,7 +5,7 @@ import std.typecons;
 import std.meta;
 
 template Pointer(T) {
-	static if(is(T == class) || is(T == class)){
+	static if(is(T == class) || is(T == interface)){
 		alias Pointer = T;
 	} else {
 		alias Pointer = T *;

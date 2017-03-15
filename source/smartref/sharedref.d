@@ -10,16 +10,17 @@ import smartref.util;
 import smartref.common;
 
 
-struct ISharedRef(Alloc,T,bool isShared = true)
+struct ISharedRef(Alloc,T)
 {
+	enum isShared = is(T == shared);
 	alias ValueType = Pointer!T;
 	alias Deleter = void function(ref Alloc,ValueType) nothrow;
-	alias Data = ExternalRefCountData!(Alloc,isShared);
+	alias Data = ExternalRefCountData!(Alloc);
 	alias DataWithDeleter = ExternalRefCountDataWithDeleter!(Alloc,ValueType,isShared);
-	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
-	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
+	alias TWeakRef = IWeakRef!(Alloc,T);
+	alias TSharedRef = ISharedRef!(Alloc,T);
 	static if(is(T == class)){
-		alias QEnableSharedFromThis = IEnableSharedFromThis!(Alloc,T,isShared);
+		alias QEnableSharedFromThis = IEnableSharedFromThis!(Alloc,T);
 	}
 	enum isSaticAlloc = (stateSize!Alloc == 0);
 
@@ -95,7 +96,7 @@ struct ISharedRef(Alloc,T,bool isShared = true)
 	}
 
 	auto castTo(U)(){
-		ISharedRef!(Alloc,U,isShared) result;
+		ISharedRef!(Alloc,U) result;
 		if(isNull)
 			return result;
 		alias CastType = Pointer!U;
@@ -184,13 +185,13 @@ private:
 		alias _alloc = Alloc.instance;
 }
 
-struct IWeakRef(Alloc,T,bool isShared = true)
+struct IWeakRef(Alloc,T)
 {
 	alias ValueType = Pointer!T;
-	alias Data = ExternalRefCountData!(Alloc,isShared);
+	alias Data = ExternalRefCountData!(Alloc);
 	enum isSaticAlloc = (stateSize!Alloc == 0);
-	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
-	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
+	alias TWeakRef = IWeakRef!(Alloc,T);
+	alias TSharedRef = ISharedRef!(Alloc,T);
 
 	this(ref TSharedRef tref){
 		this._ptr = tref._ptr;
@@ -267,19 +268,25 @@ private:
 }
 
 
-abstract class IEnableSharedFromThis(Alloc,T,bool isShared = true)
+interface IEnableSharedFromThis(Alloc,T)
 {
-	alias TWeakRef = IWeakRef!(Alloc,T,isShared);
-	alias TSharedRef = ISharedRef!(Alloc,T,isShared);
+	alias TWeakRef = IWeakRef!(Alloc,T);
+	alias TSharedRef = ISharedRef!(Alloc,T);
 
+	void initializeFromSharedPointer(ref TSharedRef ptr);
+}
+
+mixin template EnableSharedFromThisImpl()
+{
+public:
 	pragma(inline,true)
 	final TSharedRef sharedFromThis() { return TSharedRef(__weakPointer); }
-	pragma(inline,true)
-	final TSharedRef sharedFromThis() const { return TSharedRef(__weakPointer); }
-
-
-	pragma(inline,true)
-	final void initializeFromSharedPointer(ref TSharedRef ptr) const
+//	pragma(inline,true)
+//	final TSharedRef sharedFromThis() const { return TSharedRef(__weakPointer); }
+	
+	
+	//pragma(inline,true)
+	final override void initializeFromSharedPointer(ref TSharedRef ptr)
 	{
 		__weakPointer = ptr;
 	}
@@ -290,55 +297,77 @@ private:
 private:
 
 
-abstract class ExternalRefCountData(Alloc,bool isShared)
+interface ExternalRefCountData(Alloc)
 {
+	int strongDef() nothrow;
+	int strongRef() nothrow;
+	int weakDef() nothrow;
+	int weakRef() nothrow;
+	@property int weakref() nothrow;
+	@property int strongref() nothrow;
+	void free(ref Alloc alloc) nothrow;
+}
+
+final class ExternalRefCountDataWithDeleter(Alloc,ValueType,bool isShared) : ExternalRefCountData!(Alloc)
+{
+	pragma(msg, "is  ahsred " ~ isShared.stringof);
+	alias Deleter = void function(ref Alloc,ValueType) nothrow;
 	
-	pragma(inline,true)
-	final int strongDef(){
+	this(ValueType ptr, Deleter dele){
+		value = ptr;
+		deleater = dele;
+	}
+
+
+	override int strongDef() nothrow {
 		static if(isShared)
 			return atomicOp!("-=")(_strongref,1);
 		else 
 			return -- _strongref;
 	}
-	pragma(inline)
-	final int strongRef(){
+
+
+	override int strongRef() nothrow{
 		static if(isShared)
 			return atomicOp!("+=")(_strongref,1);
 		else
 			return ++ _strongref;
 	}
-	pragma(inline,true)
-	final int weakDef(){
+
+	override int weakDef() nothrow {
 		static if(isShared)
 			return atomicOp!("-=")(_weakref,1);
 		else
 			return -- _weakref;
 	}
-	pragma(inline)
-	final int weakRef(){
+	override int weakRef() nothrow {
 		static if(isShared)
 			return atomicOp!("+=")(_weakref,1);
 		else
 			return ++ _weakref;
 	}
-	
-	pragma(inline,true)
-	final @property weakref(){
+
+	override @property int weakref() nothrow{
 		static if(isShared)
 			return atomicLoad(_weakref);
 		else
 			return _weakref;
 	}
-	
-	pragma(inline,true)
-	final @property strongref(){
+
+	override @property int strongref() nothrow{
 		static if(isShared)
 			return atomicLoad(_strongref);
 		else
 			return _strongref;
 	}
-	
-	void free(ref Alloc alloc) nothrow;
+
+	override void free(ref Alloc alloc) nothrow{
+		if(deleater && value) 
+			deleater(alloc,value);
+		deleater = null;
+		value = null;
+	}
+
 private:
 	static if(isShared){
 		shared int _weakref = 1;
@@ -347,24 +376,7 @@ private:
 		int _weakref = 1;
 		int _strongref = 1;
 	}
-}
-
-final class ExternalRefCountDataWithDeleter(Alloc,ValueType,bool isShared) : ExternalRefCountData!(Alloc,isShared)
-{
-	alias Deleter = void function(ref Alloc,ValueType) nothrow;
-	
-	this(ValueType ptr, Deleter dele){
-		value = ptr;
-		deleater = dele;
-	}
 
 	Deleter  deleater;
 	ValueType value;
-
-	override void free(ref Alloc alloc) nothrow{
-		if(deleater && value) 
-			deleater(alloc,value);
-		deleater = null;
-		value = null;
-	}
 }

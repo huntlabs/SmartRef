@@ -7,18 +7,14 @@ public import smartref.sharedref;
 public import smartref.common;
 import smartref.util;
 
-alias SharedRef(T, bool isShared = true) = ISharedRef!(typeof(SmartGCAllocator.instance),T,isShared);
-alias WeakRef(T, bool isShared = true) = IWeakRef!(typeof(SmartGCAllocator.instance),T,isShared);
-alias EnableSharedFromThis(T, bool isShared = true) = IEnableSharedFromThis!(typeof(SmartGCAllocator.instance),T,isShared);
+alias SharedRef(T) = ISharedRef!(typeof(SmartGCAllocator.instance),T);
+alias WeakRef(T) = IWeakRef!(typeof(SmartGCAllocator.instance),T);
+alias EnableSharedFromThis(T) = IEnableSharedFromThis!(typeof(SmartGCAllocator.instance),T);
 alias ScopedRef(T) = IScopedRef!(typeof(SmartGCAllocator.instance),T);
 
 // alias
 auto makeSharedRef(T,Args...)(auto ref Args args){
 	return SharedRef!(T)(SmartGCAllocator.instance.make!T(args));
-}
-
-auto makeSingSharedRef(T,Args...)(auto ref Args args){
-	return SharedRef!(T,false)(SmartGCAllocator.instance.make!T(args));
 }
 
 auto makeScopedRef(T,Args...)(auto ref Args args){
@@ -29,13 +25,6 @@ auto makeSharedRefWithDeleter(T,Args...)(auto ref Args args){
 	static assert(args.length > 0);
 	static assert(is(typeof(args[0]) == void function(ref typeof(SmartGCAllocator.instance),Pointer!T) nothrow));
 	return SharedRef!(T)(SmartGCAllocator.instance.make!T(args[1..$]),args[0]);
-}
-
-
-auto makeSingleSharedRefWithDeleter(T,Args...)(auto ref Args args){
-	static assert(args.length > 0);
-	static assert(is(typeof(args[0]) == void function(ref typeof(SmartGCAllocator.instance),Pointer!T) nothrow));
-	return SharedRef!(T,false)(SmartGCAllocator.instance.make!T(args[1..$]),args[0]);
 }
 
 auto makeScopedRefWithDeleter(T,Args...)(auto ref Args args){
@@ -51,15 +40,6 @@ auto makeISharedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
 		return ISharedRef!(Alloc,T)(value);
 	} else {
 		return ISharedRef!(Alloc,T)(alloc,value);
-	}
-}
-
-auto makeSinglISharedRef(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Args args){
-	Pointer!T value = alloc.make!T(args);
-	static if(stateSize!Alloc == 0){
-		return ISharedRef!(Alloc,T,false)(value);
-	} else {
-		return ISharedRef!(Alloc,T,false)(alloc,value);
 	}
 }
 
@@ -80,17 +60,6 @@ auto makeISharedRefWithDeleter(T,Alloc,Args...)(auto ref Alloc alloc,auto ref Ar
 		return ISharedRef!(Alloc,T)(value,args[0]);
 	} else {
 		return ISharedRef!(Alloc,T)(alloc,value,args[0]);
-	}
-}
-
-auto makeSingleISharedRefWithDeleter(T,Alloc,Args...)(auto ref  Alloc alloc,auto ref Args args){
-	static assert(args.length > 0);
-	static assert(is(typeof(args[0]) == void function(ref Alloc,Pointer!T) nothrow));
-	Pointer!T value = alloc.make!T(args[1..$]);
-	static if(stateSize!Alloc == 0){
-		return ISharedRef!(Alloc,T,false)(value,args[0]);
-	} else {
-		return ISharedRef!(Alloc,T,false)(alloc,value,args[0]);
 	}
 }
 
@@ -124,6 +93,26 @@ version(unittest){
 				alloc.dispose(d);
 			}());
 	}
+
+	class TestMyClass : IEnableSharedFromThis!(typeof(SmartGCAllocator.instance),TestMyClass)
+	{
+		mixin EnableSharedFromThisImpl;
+		shared this(int t){
+			i = t;
+			writeln("create TestMyClass i = ", i);
+		}
+
+		this(int t){
+			i = t;
+			writeln("create TestMyClass i = ", i);
+		}
+
+		~this(){
+			writeln("free TestMyClass i = ", i);
+		}
+
+		int i = 0;
+	}
 }
 
 unittest{
@@ -154,5 +143,17 @@ unittest{
 	
 	auto a = makeIScopedRefWithDeleter!(int)(GCAllocator.instance,&freeSharedInt);
 	auto a1 = makeScopedRefWithDeleter!(int)(&smartfreeSharedInt);
+	{
+		auto aclass = makeScopedRef!TestMyClass(10);
+		aclass.i = 500;
+	}
 
+	{
+		auto sclass = makeSharedRef!(shared TestMyClass)(100);
+		sclass.i = 1000;
+		SharedRef!TestMyClass t  = makeSharedRef!TestMyClass(400);
+		t.i = 50;
+		auto th = t.sharedFromThis();
+		th.i = 30;
+	}
 }

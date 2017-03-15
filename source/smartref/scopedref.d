@@ -46,10 +46,12 @@ struct IScopedRef(Alloc,T)
 			std.algorithm.mutation.swap(other._alloc,this._alloc);
 	}
 
-	ValueType data() 
+	@property ValueType data() 
 	{
 		return _d;
 	}
+
+	alias data this;
 	
 	bool isNull() 
 	{
